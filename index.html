@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Учебный симулятор полёта шара, сопротивления воздуха и столкновений.">
+<title>Баллистика — интерактивная лаборатория</title>
+<style>:root {
+  color-scheme: light;
+  scrollbar-gutter: stable;
+  --ink: #18273b; --muted: #566778; --line: #d9e2e6; --teal: #007d7a;
+  --paper: #fff; --soft: #e3f4f1; --bg: #f7f5f0;
+  font: 15px/1.45 system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 22px clamp(12px, 2.2vw, 36px) 26px; color: var(--ink); background: var(--bg); }
+button, input, select { font: inherit; color: inherit; }
+button, .button, select, input:not([type=checkbox],[type=range],[type=file]) {
+  min-height: 37px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+}
+button, .button { padding: 6px 11px; font-weight: 600; cursor: pointer; }
+.button { display: inline-flex; align-items: center; color: inherit; text-decoration: none; }
+button:hover:not(:disabled), .button:hover { background: var(--soft); border-color: #94c6be; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+button:disabled, input:disabled, select:disabled { opacity: .48; cursor: default; }
+.primary, button[aria-pressed=true] { color: #fff; background: var(--teal); border-color: var(--teal); }
+.primary:hover:not(:disabled), button[aria-pressed=true]:hover { background: #006560; color: #fff; }
+.mast { max-width: 1700px; margin: 0 auto 19px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: clamp(30px, 3.6vw, 53px); letter-spacing: -.06em; line-height: 1.02; }
+.brand p { color: var(--muted); margin-top: 5px; }
+.presets, .header-actions, .tools, .overlays, .sidebar-actions, .dialog-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.presets { padding: 4px; border: 1px solid var(--line); border-radius: 12px; }
+.presets button { border-color: transparent; background: transparent; }
+.presets button[aria-pressed=true] { background: var(--teal); }
+main { max-width: 1700px; margin: auto; display: grid; grid-template-columns: minmax(0, 1fr) clamp(285px, 26vw, 365px); gap: 14px; align-items: start; }
+.panel { border: 1px solid var(--line); background: var(--paper); border-radius: 17px; padding: 13px; box-shadow: 0 2px 6px #172a3a07; min-width: 0; }
+.workspace { container-type: inline-size; }
+.toolbar { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 11px; }
+.overlays { gap: 7px 14px; }
+.overlays label, .physics label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+input[type=checkbox] { appearance: none; flex: none; width: 32px; height: 18px; border-radius: 12px; margin: 0; background: #aab7c0; position: relative; cursor: pointer; }
+input[type=checkbox]::after { content: ''; position: absolute; width: 12px; height: 12px; top: 3px; left: 3px; border-radius: 50%; background: #fff; transition: transform .14s; }
+input[type=checkbox]:checked { background: var(--teal); }
+input[type=checkbox]:checked::after { transform: translateX(14px); }
+.scene { position: relative; overflow: hidden; border-radius: 13px; border: 1px solid #cddfea; background: linear-gradient(#f1f8fc, #e6f3f9); }
+#plot { display: block; width: 100%; height: clamp(335px, 52vh, 730px); touch-action: none; cursor: grab; }
+#plot:active { cursor: grabbing; }
+.scene-caption { position: absolute; left: 12px; bottom: 7px; font-size: 11px; color: #496579; pointer-events: none; }
+#scene-message { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; padding: 18px; gap: 10px; background: #eff8fcdb; color: #274657; }
+#scene-message[hidden] { display: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 5px 15px; margin: 9px 2px 11px; color: var(--muted); font-size: 12px; }
+.legend span::before { display: inline-block; content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--c); margin: 0 6px 3px 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 10px; }
+.metrics > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.metrics span { display: block; color: var(--muted); font-size: 12px; }
+.metrics strong { display: block; margin-top: 1px; font-size: clamp(16px, 2.3vw, 24px); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.transport {
+  display: grid;
+  grid-template-areas: "play restart timeline clock rate events";
+  grid-template-columns: 120px 38px minmax(58px, 1fr) 118px 64px 116px;
+  align-items: center;
+  gap: 7px;
+}
+#play { grid-area: play; white-space: nowrap; }
+#restart { grid-area: restart; }
+#timeline { grid-area: timeline; width: 100%; min-width: 0; margin: 0; accent-color: var(--teal); }
+#clock {
+  grid-area: clock;
+  white-space: nowrap;
+  text-align: right;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+#rate { grid-area: rate; min-width: 0; width: 100%; }
+#events { grid-area: events; min-width: 0; width: 100%; text-overflow: ellipsis; }
+#flight-note { block-size: 2.9em; overflow: auto; }
+@container (max-width: 555px) {
+  .transport {
+    grid-template-areas: "play restart events rate" "timeline timeline clock clock";
+    grid-template-columns: 120px 38px minmax(0, 1fr) 64px;
+  }
+}
+select { padding: 4px 7px; max-width: 100%; }
+.settings { padding: 15px; }
+.settings h2 { font-size: 21px; letter-spacing: -.035em; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-bottom: 1px solid var(--line); padding: 10px 0 8px; }
+.tabs button { border-color: transparent; padding-inline: 4px; }
+#controls { display: grid; gap: 7px; align-content: start; padding-top: 10px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 47%); align-items: center; gap: 9px; font-size: 13px; min-height: 36px; }
+.field > input, .field > select { width: 100%; padding: 5px 8px; min-width: 0; }
+.field .unit { display: block; font-size: 11px; color: var(--muted); }
+.physics { display: grid; gap: 10px; margin-top: 14px; padding: 12px 0; border-block: 1px solid var(--line); font-size: 13px; }
+.physics h3 { font-size: 16px; }
+.bounce-row { display: flex; justify-content: space-between; gap: 5px; }
+.bounce-row button { font-size: 12px; min-height: 25px; padding: 1px 6px; }
+.sidebar-actions { margin-top: 10px; }
+.sidebar-actions button { font-size: 12px; }
+.shortcut, .note { color: var(--muted); font-size: 12px; margin-top: 9px; }
+dialog { width: min(720px, calc(100% - 24px)); max-height: 88vh; overflow: auto; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); padding: 20px; box-shadow: 0 16px 60px #14263b38; }
+dialog::backdrop { background: #17283b68; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
+.dialog-head h2 { font-size: 23px; }
+.dialog-head button { font-size: 22px; padding: 0 11px; }
+dialog li { margin: 6px 0; }
+dialog .field { margin-block: 7px; }
+.dialog-actions { margin-top: 11px; }
+.equations { display: grid; gap: 9px; }
+.equations article { padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; }
+.equations code { display: block; margin: 7px 0; padding: 8px; border-radius: 7px; background: var(--soft); color: #075a57; font-size: 15px; }
+.equations p { font-size: 14px; }
+a { color: #006762; }
+#chart { width: 100%; height: 260px; display: block; background: #f1f8fc; border: 1px solid var(--line); border-radius: 9px; }
+.table-wrap { overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px; border-bottom: 1px solid var(--line); }
+@media (max-width: 820px) { main { grid-template-columns: 1fr; } .mast { justify-content: start; } }
+@media (max-width: 540px) {
+  body { padding: 12px 8px; }
+  .panel { padding: 9px; }
+  .presets button, .header-actions > * { font-size: 12px; }
+  .metrics { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="brand"><h1>Баллистика</h1><p>Интерактивная лаборатория</p></div>
+  <nav class="presets" aria-label="Готовые опыты">
+    <button type="button" data-preset="0" aria-pressed="true">Бросок</button>
+    <button type="button" data-preset="1" aria-pressed="false">Падение и отскоки</button>
+    <button type="button" data-preset="2" aria-pressed="false">Удар о стену</button>
+  </nav>
+  <div class="header-actions">
+    <button data-dialog="guide">Инструкция</button><button data-dialog="formulas">Формулы</button>
+    <a id="mac" class="button" href="./ballistics-mac.dmg">↓ Скачать для Mac</a>
+  </div>
+</header>
+<main>
+  <section class="panel workspace" aria-label="Симуляция">
+    <div class="toolbar">
+      <div class="overlays">
+        <label><input type="checkbox" id="trajectory" checked> Траектория</label>
+        <label><input type="checkbox" id="forces" checked> Силы</label>
+        <label><input type="checkbox" id="velocities" checked> Скорости</label>
+        <label><input type="checkbox" id="follow"> Следить за шаром</label>
+      </div>
+      <div class="tools">
+        <button id="fit" title="Вся траектория">Общий вид</button>
+        <button id="out" aria-label="Отдалить" title="Отдалить">−</button>
+        <button id="in" aria-label="Приблизить" title="Приблизить">+</button>
+        <button id="zoom-ball" title="Приблизить шар">К шару</button>
+      </div>
+    </div>
+    <div class="scene">
+      <canvas id="plot" aria-label="График полёта и векторы скорости и сил"></canvas>
+      <div id="scene-message" role="status"><span id="scene-text">Загружаем расчётный модуль…</span><button id="retry" hidden>Повторить</button></div>
+      <div class="scene-caption">Одинаковый масштаб по осям · стрелки условной длины</div>
+    </div>
+    <div class="legend" aria-label="Легенда">
+      <span style="--c:#008c80">Скорость</span><span style="--c:#bd7700">Относительно воздуха</span>
+      <span style="--c:#c74536">Тяжесть</span><span style="--c:#006dad">Сопротивление</span>
+      <span style="--c:#8055a9">Архимед</span><span style="--c:#494e62">Контакт</span>
+    </div>
+    <div class="metrics">
+      <div><span>Скорость шара</span><strong id="speed-readout">—</strong></div>
+      <div><span>Относительно воздуха</span><strong id="air-readout">—</strong></div>
+      <div><span>Высота</span><strong id="height-readout">—</strong></div>
+      <div><span>Координата x</span><strong id="distance-readout">—</strong></div>
+    </div>
+    <div class="transport">
+      <button id="play" class="primary" disabled>▶ Запустить</button>
+      <button id="restart" title="Сначала" aria-label="Сначала">↺</button>
+      <input id="timeline" type="range" min="0" max="1" step="any" value="0" aria-label="Время полёта" disabled>
+      <output id="clock" aria-live="off">0,000 / — с</output>
+      <select id="rate" aria-label="Скорость воспроизведения"><option value=".1">0,1×</option><option value=".5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      <select id="events" aria-label="События полёта" disabled><option value="">События</option></select>
+    </div>
+    <p id="flight-note" class="note" role="status" tabindex="0">Подготавливаем опыт…</p>
+  </section>
+
+  <aside class="panel settings">
+    <h2>Условия опыта</h2>
+    <nav id="tabs" class="tabs" aria-label="Группы настроек">
+      <button data-tab="launch" aria-pressed="true">Бросок</button>
+      <button data-tab="ball" aria-pressed="false">Шар</button>
+      <button data-tab="air" aria-pressed="false">Среда</button>
+      <button data-tab="wall" aria-pressed="false">Стена</button>
+    </nav>
+    <div id="controls"></div>
+    <div class="physics">
+      <h3>Физика опыта</h3>
+      <label><input id="drag_enabled" type="checkbox"> Сопротивление воздуха</label>
+      <div class="bounce-row"><label><input id="bounce_enabled" type="checkbox" checked> Отскоки от земли</label><button data-dialog="bounce">Настроить</button></div>
+      <label><input id="wall_enabled" type="checkbox"> Стена</label>
+      <label><input id="slow" type="checkbox" checked> Замедлять столкновения</label>
+      <label><input id="compare" type="checkbox"> Сравнить с вакуумом</label>
+    </div>
+    <div class="sidebar-actions">
+      <button data-dialog="trials">Таблица опытов</button>
+      <button data-dialog="data">График и экспорт</button>
+      <button id="reset">Сбросить условия</button>
+    </div>
+    <p class="shortcut">Пробел — пуск или пауза · R — сначала</p>
+  </aside>
+</main>
+
+<dialog id="guide"><div class="dialog-head"><h2>Инструкция</h2><button data-close aria-label="Закрыть">×</button></div>
+  <p>Выбери готовый опыт или задай скорость, угол и высоту во вкладке «Бросок». Нажми «Запустить». Ползунок времени и меню «События» позволяют перейти к любому моменту.</p>
+  <ul>
+    <li><b>Шар.</b> Меняй массу, диаметр или объём. При расчёте по плотности масса автоматически обновляется с размером.</li>
+    <li><b>Среда.</b> По умолчанию выбран вакуум. Включи сопротивление воздуха или выбери модель. «Сфера» подходит для обычного броска шара. Ветер влияет на скорость относительно воздуха и направление силы сопротивления.</li>
+    <li><b>Стена.</b> Включи её в «Физике опыта» и задай расстояние, высоту и толщину. Режим «Удар о стену» включает её сразу. Параметры материалов стены условные.</li>
+    <li><b>Вид.</b> Колесо, кнопки масштаба и перетаскивание меняют обзор. «Следить за шаром» включает подвижную камеру. «К шару» приближает текущую позицию.</li>
+    <li><b>Данные.</b> «График и экспорт» открывает графики и сохранение. «Таблица опытов» сравнивает сочетания массы и скорости для учебной стены.</li>
+  </ul>
+</dialog>
+<dialog id="formulas"><div class="dialog-head"><h2>Формулы</h2><button data-close aria-label="Закрыть">×</button></div>
+  <div class="equations">
+    <article><h3>Движение и силы</h3><code>m · a = F₍тяж₎ + F₍Арх₎ + F₍сопр₎ + F₍конт₎</code><p>Тяжесть mg направлена вниз. Сила Архимеда ρVg направлена вверх. Контактная сила появляется при столкновении со стеной.</p></article>
+    <article><h3>Скорость относительно воздуха</h3><code>u⃗ = v⃗ − w⃗</code><p>v⃗ — скорость шара относительно земли, w⃗ — скорость ветра. Скорости измеряются в м/с, силы — в ньютонах.</p></article>
+    <article><h3>Сопротивление воздуха</h3><code>F⃗ = −b · u⃗<br>F⃗ = −½ρ Cᴅ A |u⃗| · u⃗</code><p>В линейной модели коэффициент b задаётся вручную. В квадратичной Cᴅ постоянен. Модель «Сфера» пересчитывает Cᴅ по Re = ρ|u⃗| · 2r / μ. Площадь сечения A = πr².</p><p><a href="https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/drag-equation/" target="_blank" rel="noreferrer">Формула NASA</a> · <a href="https://pages.mtu.edu/~fmorriso/DataCorrelationForSphereDrag2016.pdf" target="_blank" rel="noreferrer">Корреляция Моррисон</a></p></article>
+    <article><h3>Размер и отскок</h3><code>V = 4πr³/3 ··· m = ρ₍шара₎V<br>vᵧ после = −e · vᵧ до</code><p>e — доля вертикальной скорости, сохраняемая при отскоке. 72 % превращают 10 м/с вниз в 7,2 м/с вверх.</p></article>
+    <article><h3>Допущения</h3><p>Однородная среда, постоянная тяжесть, шар без вращения. Столкновение со стеной моделируется как упругий контакт с возможным локальным разрушением учебной панели.</p></article>
+  </div>
+</dialog>
+<dialog id="bounce"><div class="dialog-head"><h2>Отскоки от земли</h2><button data-close aria-label="Закрыть">×</button></div>
+  <label class="field">Доля вертикальной скорости, % <input id="restitution" type="number" min="0" max="100" step="1"></label>
+  <label class="field">Максимум отскоков <input id="max_bounces" type="number" min="1" max="50" step="1"></label>
+  <p id="bounce-example" class="note"></p>
+</dialog>
+<dialog id="trials"><div class="dialog-head"><h2>Таблица опытов</h2><button data-close aria-label="Закрыть">×</button></div>
+  <p>До 100 сочетаний. Разделяй значения точкой с запятой. Расчёт использует текущие параметры учебной стены.</p>
+  <label class="field">Начальные скорости, м/с <input id="trial-speeds" value="5; 10; 20; 30; 50; 80"></label>
+  <label class="field">Массы, кг <input id="trial-masses" value="0,05; 0,145; 0,5; 1"></label>
+  <div class="dialog-actions"><button id="run-trials" class="primary" disabled>Рассчитать</button><button id="trial-csv" disabled>Скачать CSV</button></div>
+  <p id="trial-status" role="status"></p><div class="table-wrap" id="trial-table"></div>
+</dialog>
+<dialog id="data"><div class="dialog-head"><h2>График и экспорт</h2><button data-close aria-label="Закрыть">×</button></div>
+  <label class="field">График <select id="chart-kind"><option value="velocity">Скорости</option><option value="height">Высота</option><option value="drag">Сопротивление</option><option value="energy">Энергия</option><option value="contact">Реакция стены</option></select></label>
+  <canvas id="chart" aria-label="График выбранной величины от времени"></canvas>
+  <div class="dialog-actions"><button id="csv">Траектория CSV</button><button id="event-csv">События CSV</button><button id="png">Сцена PNG</button><button id="json">Параметры JSON</button><label class="button" for="load-json">Открыть JSON</label><input type="file" id="load-json" accept=".json,application/json" hidden></div>
+  <p id="export-status" role="status"></p>
+</dialog>
+<script>
+const CONFIG = {"presets":[{"planet":0,"gravity":9.80665,"mass":0.145,"radius":0.0366,"speed":25.0,"angle":45.0,"height":1.5,"density":1.225,"viscosity":1.81e-05,"wind":0.0,"linear_b":0.025,"cd":0.47,"mode":3,"max_time":180.0,"drag_enabled":false,"derive_mass":false,"body_density":700.0,"ball_material":0,"bounce_enabled":true,"restitution":0.72,"max_bounces":25,"wall_enabled":false,"wall_x":12.0,"wall_height":15.0,"wall_thickness":0.02,"wall_material":1,"wall_resistance":200000.0,"wall_restitution":0.4},{"planet":0,"gravity":9.80665,"mass":0.145,"radius":0.0366,"speed":0.0,"angle":0.0,"height":8.0,"density":1.225,"viscosity":1.81e-05,"wind":0.0,"linear_b":0.025,"cd":0.47,"mode":3,"max_time":180.0,"drag_enabled":false,"derive_mass":false,"body_density":700.0,"ball_material":0,"bounce_enabled":true,"restitution":0.78,"max_bounces":25,"wall_enabled":false,"wall_x":12.0,"wall_height":15.0,"wall_thickness":0.02,"wall_material":1,"wall_resistance":200000.0,"wall_restitution":0.4},{"planet":0,"gravity":9.80665,"mass":0.145,"radius":0.0366,"speed":26.0,"angle":12.0,"height":1.2,"density":1.225,"viscosity":1.81e-05,"wind":0.0,"linear_b":0.025,"cd":0.47,"mode":3,"max_time":180.0,"drag_enabled":false,"derive_mass":false,"body_density":700.0,"ball_material":0,"bounce_enabled":true,"restitution":0.72,"max_bounces":25,"wall_enabled":true,"wall_x":8.0,"wall_height":4.0,"wall_thickness":0.12,"wall_material":2,"wall_resistance":2000000.0,"wall_restitution":0.4}],"modes":["Линейное · −b u","Сфера · Cᴅ(Re)","Квадратичное · Cᴅ = const","Вакуум"],"planets":[{"name":"Земля","gravity":9.80665,"density":1.225,"viscosity":1.81e-05,"sound_speed":340.3,"color":"#66e4c4"},{"name":"Луна","gravity":1.62,"density":0.0,"viscosity":1.81e-05,"sound_speed":0.0,"color":"#c5cce7"},{"name":"Марс","gravity":3.71,"density":0.02,"viscosity":1e-05,"sound_speed":240.0,"color":"#f0a17d"},{"name":"Венера","gravity":8.87,"density":65.0,"viscosity":3.3e-05,"sound_speed":410.0,"color":"#e6c78b"},{"name":"Меркурий","gravity":3.7,"density":0.0,"viscosity":1.81e-05,"sound_speed":0.0,"color":"#aab8cd"},{"name":"Своя среда","gravity":9.80665,"density":1.225,"viscosity":1.81e-05,"sound_speed":340.3,"color":"#a5a1ff"}],"balls":[{"name":"Свои значения","density":700.0,"restitution":0.7},{"name":"Пеноматериал · 30 кг/м³","density":30.0,"restitution":0.3},{"name":"Древесина · 600 кг/м³","density":600.0,"restitution":0.4},{"name":"Резина · 1100 кг/м³","density":1100.0,"restitution":0.8},{"name":"Стекло · 2500 кг/м³","density":2500.0,"restitution":0.6},{"name":"Алюминий · 2700 кг/м³","density":2700.0,"restitution":0.5},{"name":"Сталь · 7850 кг/м³","density":7850.0,"restitution":0.5}],"walls":[{"name":"Пеноматериал (учебный)","resistance":20000.0,"color":"#d8e0e6","elastic_fraction":0.25},{"name":"Картон (учебный)","resistance":200000.0,"color":"#c7ab7c","elastic_fraction":0.06},{"name":"Древесина (учебный)","resistance":2000000.0,"color":"#b68b5a","elastic_fraction":0.02},{"name":"Кирпич (учебный)","resistance":5000000.0,"color":"#ba7665","elastic_fraction":0.005},{"name":"Бетон (учебный)","resistance":15000000.0,"color":"#a0a6ac","elastic_fraction":0.003},{"name":"Свои параметры","resistance":1000000.0,"color":"#afbfcf","elastic_fraction":0.02}]};
+const SOURCES = {"ballistics/__init__.py":"\"\"\"Trajectory Lab: a local, two-dimensional flight laboratory.\"\"\"\n","ballistics/physics.py":"\"\"\"SI units throughout. Height is clearance of the sphere above a flat ground.\n\nThe sphere translates without spin in a uniform fluid and a constant gravity\nfield. Ground impacts use restitution impulses. Walls use a finite-duration\nshort hysteretic elastic response followed by local brittle fracture and\nchannel transit; this is not a calibrated\nstructural damage prediction.\n\"\"\"\nfrom dataclasses import dataclass, replace\nfrom bisect import bisect_right\nfrom math import cos, sin, radians, pi, hypot, isfinite, sqrt\n\nimport numpy as np\nfrom scipy.integrate import solve_ivp\n\nfrom .materials import BALL_MATERIALS, WALL_MATERIALS\n\n\n@dataclass(frozen=True)\nclass Planet:\n    name: str\n    gravity: float\n    density: float\n    viscosity: float\n    sound_speed: float\n    color: str\n\n\n# Rounded reference conditions, not a weather model. Earth: dry air, 15 °C,\n# 101325 Pa; other atmospheres are representative surface approximations.\nPLANETS = (\n    Planet(\"Земля\", 9.80665, 1.225, 1.81e-5, 340.3, \"#66e4c4\"),\n    Planet(\"Луна\", 1.62, 0.0, 1.81e-5, 0.0, \"#c5cce7\"),\n    Planet(\"Марс\", 3.71, 0.020, 1.0e-5, 240.0, \"#f0a17d\"),\n    Planet(\"Венера\", 8.87, 65.0, 3.3e-5, 410.0, \"#e6c78b\"),\n    Planet(\"Меркурий\", 3.70, 0.0, 1.81e-5, 0.0, \"#aab8cd\"),\n    Planet(\"Своя среда\", 9.80665, 1.225, 1.81e-5, 340.3, \"#a5a1ff\"),\n)\nMODES = (\"Линейное · −b u\", \"Сфера · Cᴅ(Re)\", \"Квадратичное · Cᴅ = const\", \"Вакуум\")\n\n\n@dataclass(frozen=True)\nclass Parameters:\n    planet: int = 0\n    gravity: float = 9.80665\n    mass: float = 0.145\n    radius: float = 0.0366\n    speed: float = 25.0\n    angle: float = 45.0\n    height: float = 1.5\n    density: float = 1.225\n    viscosity: float = 1.81e-5\n    wind: float = 0.0\n    linear_b: float = 0.025\n    cd: float = 0.47\n    mode: int = 0\n    max_time: float = 180.0\n    drag_enabled: bool = True\n    derive_mass: bool = False\n    body_density: float = 700.0\n    ball_material: int = 0\n    bounce_enabled: bool = False\n    restitution: float = .7\n    max_bounces: int = 25\n    wall_enabled: bool = False\n    wall_x: float = 12.0\n    wall_height: float = 15.0\n    wall_thickness: float = .02\n    wall_material: int = 1\n    wall_resistance: float = 200_000.0\n    wall_restitution: float = .4\n\n    def validate(self):\n        for name in (\"gravity\", \"mass\", \"radius\", \"speed\", \"angle\", \"height\", \"density\",\n                     \"viscosity\", \"wind\", \"linear_b\", \"cd\", \"max_time\", \"body_density\",\n                     \"restitution\", \"wall_x\", \"wall_height\", \"wall_thickness\",\n                     \"wall_resistance\", \"wall_restitution\"):\n            if not isfinite(getattr(self, name)):\n                raise ValueError(f\"Недопустимое значение: {name}\")\n        if self.mass \u003c= 0 or self.radius \u003c= 0 or self.viscosity \u003c= 0 or self.max_time \u003c= 0:\n            raise ValueError(\"Масса, радиус, вязкость и время должны быть положительными.\")\n        if min(self.gravity, self.speed, self.height, self.density, self.linear_b, self.cd) \u003c 0:\n            raise ValueError(\"Физические параметры не могут быть отрицательными.\")\n        if self.height >= 10_000 or abs(self.angle) > 180 or not 0 \u003c= self.mode \u003c= 3:\n            raise ValueError(\"Параметры вне области расчёта.\")\n        if not isinstance(self.mode, int) or not isinstance(self.planet, int):\n            raise ValueError(\"Индексы планеты и модели должны быть целыми.\")\n        if not 0 \u003c= self.planet \u003c len(PLANETS):\n            raise ValueError(\"Неизвестная планета.\")\n        if self.body_density \u003c= 0 or not 0 \u003c= self.restitution \u003c= 1 or not 0 \u003c= self.wall_restitution \u003c= 1:\n            raise ValueError(\"Плотность должна быть положительной, коэффициент восстановления — от 0 до 1.\")\n        for key, value, count in ((\"материал шара\", self.ball_material, len(BALL_MATERIALS)),\n                                  (\"материал стены\", self.wall_material, len(WALL_MATERIALS))):\n            if not isinstance(value, int) or not 0 \u003c= value \u003c count:\n                raise ValueError(\"Неизвестный \" + key)\n        if not isinstance(self.max_bounces, int) or not 1 \u003c= self.max_bounces \u003c= 50:\n            raise ValueError(\"Число отскоков должно быть от 1 до 50.\")\n        for key in (\"drag_enabled\", \"derive_mass\", \"bounce_enabled\", \"wall_enabled\"):\n            if not isinstance(getattr(self, key), bool):\n                raise ValueError(\"Переключатель должен иметь логическое значение: \" + key)\n        if min(self.wall_height, self.wall_thickness, self.wall_resistance) \u003c= 0:\n            raise ValueError(\"Высота, толщина и сопротивление стены должны быть положительными.\")\n        if self.wall_enabled and not self.radius + 1e-5 \u003c self.wall_x \u003c 19000 - self.wall_thickness:\n            raise ValueError(\"Стена должна находиться справа от шара и внутри области расчёта.\")\n\n    def resolved(self):\n        return replace(self, mass=self.body_density*self.volume) if self.derive_mass else self\n\n    @property\n    def sphere_density(self):\n        return self.mass/self.volume\n\n    @property\n    def wall_work(self):\n        return self.wall_resistance*self.area*self.wall_thickness\n\n    @property\n    def volume(self):\n        return 4 / 3 * pi * self.radius ** 3\n\n    @property\n    def area(self):\n        return pi * self.radius ** 2\n\n    @property\n    def rho(self):\n        return 0.0 if self.mode == 3 else self.density\n\n\ndef sphere_cd(reynolds: float) -> float:\n    \"\"\"Morrison (2013/2016), recommended up to Re=1e6.\n\n    Algebraically rewritten third term avoids negative-power overflow near 0.\n    At zero flow Cd itself is undefined; drag is evaluated separately as zero.\n    \"\"\"\n    if reynolds \u003c= 0:\n        return 0.0\n    r = reynolds\n    q = r / 263_000\n    return (24 / r + 2.6 * (r / 5) / (1 + (r / 5) ** 1.52)\n            + 0.411 * q ** 0.06 / (1 + q ** 8)\n            + 0.25 * (r / 1_000_000) / (1 + r / 1_000_000))\n\n\ndef forces(p: Parameters, vx: float, vy: float):\n    \"\"\"Return gravity, buoyancy, drag, Re, Cd. Force vectors are in world axes.\"\"\"\n    fg = (0.0, -p.mass * p.gravity)\n    fb = (0.0, p.rho * p.volume * p.gravity)\n    ux, uy = vx - p.wind, vy\n    speed = hypot(ux, uy)\n    re = p.rho * speed * 2 * p.radius / p.viscosity\n    cd = sphere_cd(re) if p.mode == 1 else p.cd\n    factor = 0.0\n    if p.rho > 0 and p.drag_enabled:\n        if p.mode == 0:\n            factor = p.linear_b\n        elif speed > 0:\n            factor = 0.5 * p.rho * cd * p.area * speed\n    return fg, fb, (-factor * ux, -factor * uy), re, cd\n\n\n@dataclass\nclass Impact:\n    time: float\n    kind: str\n    label: str\n    before: np.ndarray\n    after: np.ndarray\n    impulse: tuple[float, float]\n    energy_loss: float\n    normal_energy: float = 0.0\n    required_work: float = 0.0\n    critical_speed: float = 0.0\n    perforated: bool = False\n    start_time: float | None = None\n\n\n@dataclass\nclass WallHole:\n    time: float\n    bottom: float\n    top: float\n\n\n@dataclass\nclass WallContact:\n    start: float\n    entry: np.ndarray\n    normal: tuple[float, float]\n    stiffness: float\n    max_depth: float\n    restitution: float\n    face_hit: bool\n    turn_time: float | None = None\n    end: float | None = None\n    outcome: str = \"compression\"\n    peak_depth: float = 0.\n    fracture_depth: float | None = None\n    fracture_time: float | None = None\n    hole_index: int | None = None\n\n    @property\n    def response_end(self):\n        return self.fracture_time if self.fracture_time is not None else self.end\n\n    def depth(self, state):\n        return max(0., -(self.normal[0]*(state[0]-self.entry[0])+\n                         self.normal[1]*(state[1]-self.entry[1])))\n\n    def force(self, state, time):\n        if self.fracture_time is not None and time >= self.fracture_time:\n            return (0., 0.)\n        depth = self.depth(state)\n        if self.turn_time is not None and time >= self.turn_time:\n            # Continuous force at the turning point. Integral on unloading is\n            # e² times the loading work, without an instantaneous force jump.\n            peak = max(self.peak_depth, 1e-30)\n            ratio = min(1., depth/peak)\n            exponent = 2/max(self.restitution**2, 1e-30)-1\n            magnitude = self.stiffness*peak*ratio**exponent\n        else:\n            magnitude = self.stiffness*depth\n        return (magnitude*self.normal[0], magnitude*self.normal[1])\n\n\nclass PiecewiseSolution:\n    \"\"\"Right-continuous state, with explicit velocity/energy jumps at impacts.\"\"\"\n    def __init__(self, segments, impacts, initial):\n        self.segments = segments\n        self.starts = [a for a, _, _ in segments]\n        self.impacts = {event.time: event.after for event in impacts}\n        self.initial = initial\n\n    def __call__(self, t):\n        if np.ndim(t):\n            return np.column_stack([self(float(value)) for value in t])\n        t = float(t)\n        if t in self.impacts:\n            return self.impacts[t].copy()\n        if not self.segments:\n            return self.initial.copy()\n        index = max(0, bisect_right(self.starts, t)-1)\n        a, b, solution = self.segments[index]\n        return solution(float(np.clip(t, a, b)))\n\n\n@dataclass\nclass Flight:\n    params: Parameters\n    time: np.ndarray\n    states: np.ndarray\n    solution: object\n    landed: bool\n    reason: str\n    apex_time: float\n    warnings: tuple[str, ...]\n    impacts: tuple[Impact, ...] = ()\n    initial_state: np.ndarray | None = None\n    contacts: tuple[WallContact, ...] = ()\n    holes: tuple[WallHole, ...] = ()\n\n    @property\n    def duration(self):\n        return float(self.time[-1])\n\n    def at(self, t):\n        if self.solution is None:\n            return self.states[:, 0].copy()\n        state = self.solution(float(np.clip(t, 0, self.duration)))\n        state[1] = max(0.0, state[1])\n        return state\n\n    @property\n    def peak_height(self):\n        return float(self.at(self.apex_time)[1])\n\n    def energy_error(self, state):\n        p = self.params\n        initial = self.initial_state if self.initial_state is not None else self.states[:, 0]\n        energy = lambda s: 0.5*p.mass*(s[2]**2+s[3]**2) + p.mass*p.gravity*s[1]\n        return energy(state)-energy(initial)-state[4]-state[5]-state[7]\n\n    def contact_force(self, time):\n        state = self.at(time)\n        for contact in self.contacts:\n            if contact.start \u003c= time \u003c (contact.end if contact.end is not None else self.duration):\n                return contact.force(state, time)\n        return (0., 0.)\n\n    @property\n    def wall_impact(self):\n        return next((event for event in self.impacts if event.kind.startswith(\"wall\")), None)\n\n\ndef wall_rectangles(p, holes=()):\n    \"\"\"Remaining rectangular strips; perforation removes only its local opening.\"\"\"\n    intervals = sorted((max(0., h.bottom), min(p.wall_height, h.top)) for h in holes)\n    rectangles = []\n    bottom = 0.\n    for a, b in intervals:\n        if a > bottom:\n            rectangles.append((p.wall_x, p.wall_x+p.wall_thickness, bottom, a))\n        bottom = max(bottom, b)\n    if bottom \u003c p.wall_height:\n        rectangles.append((p.wall_x, p.wall_x+p.wall_thickness, bottom, p.wall_height))\n    return rectangles\n\n\ndef rectangle_distance(rect, x, y):\n    left, right, bottom, top = rect\n    qx = abs(x-(left+right)/2)-(right-left)/2\n    qy = abs(y-(bottom+top)/2)-(top-bottom)/2\n    return hypot(max(qx, 0), max(qy, 0))+min(max(qx, qy), 0)\n\n\ndef wall_distance(p, state, holes=()):\n    x, cy = state[0], state[1]+p.radius\n    return min((rectangle_distance(r, x, cy)-p.radius for r in wall_rectangles(p, holes)), default=1e6)\n\n\ndef wall_normal(p, state, holes=()):\n    x, cy = state[0], state[1]+p.radius\n    rectangles = wall_rectangles(p, holes)\n    if not rectangles:\n        return (-1., 0.)\n    left, right, bottom, top = min(rectangles, key=lambda r: rectangle_distance(r, x, cy))\n    dx = x-float(np.clip(x, left, right))\n    dy = cy-float(np.clip(cy, bottom, top))\n    length = hypot(dx, dy)\n    return (dx/length, dy/length) if length > 1e-12 else (-1., 0.)\n\n\ndef simulate(parameters: Parameters) -> Flight:\n    parameters.validate()\n    p = parameters.resolved()\n    p.validate()\n    angle = radians(p.angle)\n    initial = np.array([0., p.height, p.speed*cos(angle), p.speed*sin(angle), 0., 0., 0., 0., 0., 0., 0.])\n\n    active = None\n    contacts, holes = [], []\n    def derivative(_t, s):\n        fg, fb, fd, _, _ = forces(p, s[2], s[3])\n        fc = active.force(s, _t) if active is not None else (0., 0.)\n        wall_power = fc[0]*s[2]+fc[1]*s[3]\n        return (s[2], s[3], (fd[0]+fc[0])/p.mass, (fg[1]+fb[1]+fd[1]+fc[1])/p.mass,\n                fd[0]*s[2]+fd[1]*s[3], fb[1]*s[3],\n                -fd[0]*(s[2]-p.wind)-fd[1]*s[3], wall_power, fc[0], fc[1], wall_power)\n\n    def ground(_t, s):\n        return s[1]\n    ground.terminal, ground.direction = True, -1\n\n    def apex(_t, s):\n        return s[3]\n    apex.direction = -1\n\n    def domain(_t, s):\n        return min(10_000-s[1], 20_000-abs(s[0]))\n    domain.terminal, domain.direction = True, -1\n\n    def wall(_t, s):\n        return wall_distance(p, s, holes)\n    wall.terminal, wall.direction = True, -1\n\n    fg, fb, fd, *_ = forces(p, initial[2], initial[3])\n    relative_speed = hypot(initial[2]-p.wind, initial[3])\n    drag_rate = 0.\n    if p.rho > 0 and p.drag_enabled:\n        if p.mode == 0:\n            drag_rate = p.linear_b/p.mass\n        else:\n            effective_g = abs(fg[1]+fb[1])/p.mass\n            drag_rate = max(hypot(*fd)/max(relative_speed*p.mass, 1e-30),\n                            6*pi*p.viscosity*p.radius/p.mass,\n                            sqrt(.5*p.rho*p.area*(p.cd if p.mode == 2 else .47)*effective_g/p.mass))\n    method = \"Radau\" if drag_rate*p.max_time > 1000 else \"DOP853\"\n    segments, impacts, peaks = [], [], [0.]\n    current = initial.copy()\n    time = 0.\n    bounces = 0\n    wall_near = p.wall_enabled and abs(p.wall_x+p.wall_thickness/2) \u003c= p.wall_thickness/2+p.radius+2\n    landed = False\n    reason = f\"Достигнут предел расчёта: {p.max_time:g} с\"\n\n    def impact(kind, label, before, after, **details):\n        delta_k = .5*p.mass*(after[2]**2+after[3]**2-before[2]**2-before[3]**2)\n        after[7] = before[7]+delta_k\n        impulse = (p.mass*(after[2]-before[2]), p.mass*(after[3]-before[3]))\n        impacts.append(Impact(time, kind, label, before.copy(), after.copy(), impulse, -delta_k, **details))\n        return after\n\n    # Treat a launch from ground separately to avoid zero-length event loops.\n    if p.height == 0 and (current[3] \u003c 0 or (abs(current[3]) \u003c 1e-12 and derivative(0, current)[3] \u003c= 0)):\n        if p.bounce_enabled and current[3] \u003c -.05 and p.restitution*abs(current[3]) > .05:\n            after = current.copy()\n            after[3] = -p.restitution*current[3]\n            current = impact(\"ground_bounce\", \"Отскок от земли\", current, after)\n            bounces = 1\n        else:\n            if p.bounce_enabled:\n                after = current.copy()\n                after[3] = 0\n                current = impact(\"ground_stop\", \"Контакт с землёй; скольжение не рассчитывается\", current, after)\n            solution = PiecewiseSolution([], impacts, initial)\n            return Flight(p, np.array([0.]), current[:, None], solution, True,\n                          \"Шар уже касается поверхности\", 0., (), tuple(impacts), initial)\n\n    def finish_contact(kind, label, perforated=False):\n        nonlocal active\n        c = active\n        c.end, c.outcome = time, kind\n        c.peak_depth = max(c.peak_depth, c.depth(current))\n        before = c.entry\n        normal_v = before[2]*c.normal[0]+before[3]*c.normal[1]\n        impacts.append(Impact(time, kind, label, before.copy(), current.copy(),\n                              (current[8]-before[8], current[9]-before[9]),\n                              -(current[10]-before[10]), .5*p.mass*normal_v**2,\n                              p.wall_work, sqrt(2*p.wall_work/p.mass), perforated, c.start))\n        if perforated:\n            # Keep the surrounding wall. The local channel includes the sphere's\n            # vertical sweep, not the entire obstacle.\n            bottom = max(0., min(before[1], current[1])-.15*p.radius)\n            top = max(before[1], current[1])+2.15*p.radius\n            if c.hole_index is None:\n                holes.append(WallHole(time, bottom, top))\n            else:\n                hole = holes[c.hole_index]\n                hole.bottom, hole.top = min(hole.bottom, bottom), max(hole.top, top)\n        active = None\n\n    for _ in range(300):\n        events = [ground, apex, domain]\n        wall_index = guard_index = turn_index = exit_index = rupture_index = transit_index = None\n        max_step = .5\n        local_method = method\n        if active is not None:\n            if active.fracture_time is not None:\n                def transit_exit(_t, state):\n                    return active.depth(state)-active.max_depth\n                transit_exit.terminal, transit_exit.direction = True, 1\n                transit_index = len(events)\n                events.append(transit_exit)\n                # Broken channel: no fictitious elastic force inside the wall.\n                max_step = min(.01, active.max_depth/(max(hypot(*current[2:4]), 1)*10))\n            else:\n                def contact_exit(_t, state):\n                    return -(active.normal[0]*(state[0]-active.entry[0])+active.normal[1]*(state[1]-active.entry[1]))\n                contact_exit.terminal, contact_exit.direction = True, -1\n                exit_index = len(events)\n                events.append(contact_exit)\n                if active.turn_time is None:\n                    def contact_turn(_t, state):\n                        return state[2]*active.normal[0]+state[3]*active.normal[1]\n                    contact_turn.terminal, contact_turn.direction = True, 1\n                    turn_index = len(events)\n                    events.append(contact_turn)\n                    if active.face_hit:\n                        def rupture(_t, state):\n                            return active.depth(state)-active.fracture_depth\n                        rupture.terminal, rupture.direction = True, 1\n                        rupture_index = len(events)\n                        events.append(rupture)\n                max_step = min(.01, max(1e-12, sqrt(p.mass/active.stiffness)/8))\n            local_method = \"DOP853\"\n        elif p.wall_enabled and wall_rectangles(p, holes):\n            middle = p.wall_x+p.wall_thickness/2\n            margin = p.wall_thickness/2+p.radius+2\n            if wall_near:\n                wall_index = len(events)\n                events.append(wall)\n                acceleration = abs(p.gravity*(1-p.rho*p.volume/p.mass))\n                speed_bound = max(hypot(current[2], current[3]), abs(p.wind), 1)+acceleration*.5\n                max_step = min(.25, (2*p.radius+p.wall_thickness)/(4*speed_bound))\n                def guard(_t, state):\n                    return margin-abs(state[0]-middle)\n            else:\n                side = -1 if current[0] \u003c middle else 1\n                def guard(_t, state):\n                    return side*(state[0]-middle)-margin\n            guard.terminal, guard.direction = True, -1\n            guard_index = len(events)\n            events.append(guard)\n        result = solve_ivp(derivative, (time, p.max_time), current, method=local_method,\n                           rtol=2e-9, atol=1e-10, dense_output=True,\n                           max_step=max_step, events=events)\n        if not result.success:\n            raise RuntimeError(\"Не удалось рассчитать траекторию: \"+result.message)\n        end = float(result.t[-1])\n        segments.append((time, end, result.sol))\n        peaks.extend(result.t_events[1])\n        time = end\n        current = result.y[:, -1].copy()\n        if len(result.t_events[2]):\n            reason = \"Достигнута граница локальной модели\"\n            break\n        if len(result.t_events[0]):\n            current[1] = 0.\n            if not p.bounce_enabled:\n                landed = True\n                reason = \"Касание поверхности · состояние до удара\"\n                break\n            if bounces >= p.max_bounces:\n                landed = True\n                reason = \"Достигнут предел числа отскоков; показано состояние до следующего удара\"\n                break\n            after = current.copy()\n            after[3] = -p.restitution*current[3]\n            if after[3] \u003c .05 or p.restitution == 0:\n                after[3] = 0.\n                current = impact(\"ground_stop\", \"Контакт с землёй; скольжение не рассчитывается\", current, after)\n                landed = True\n                reason = \"Отскоки завершены; движение по земле не рассчитывается\"\n                break\n            bounces += 1\n            current = impact(\"ground_bounce\", f\"Отскок от земли № {bounces}\", current, after)\n        elif turn_index is not None and len(result.t_events[turn_index]):\n            active.peak_depth = active.depth(current)\n            active.turn_time = time\n            if active.restitution == 0:\n                finish_contact(\"wall_stop\", \"Контакт со стеной без отскока\")\n                reason = \"Достигнуто максимальное сжатие; скольжение вдоль стены не рассчитывается\"\n                break\n        elif rupture_index is not None and len(result.t_events[rupture_index]):\n            active.fracture_time = time\n            active.peak_depth = active.depth(current)\n            active.hole_index = len(holes)\n            holes.append(WallHole(time, max(0., current[1]-.15*p.radius), current[1]+2.15*p.radius))\n        elif transit_index is not None and len(result.t_events[transit_index]):\n            finish_contact(\"wall_pass\", \"Локальное пробитие (модель контакта)\", True)\n        elif exit_index is not None and len(result.t_events[exit_index]):\n            face_hit = active.face_hit\n            nx, ny = active.normal\n            finish_contact(\"wall_rebound\" if face_hit else \"wall_edge\",\n                           \"Стена не пробита; отскок\" if face_hit else \"Отскок от края стены\")\n            current[0] += nx*1e-9\n            current[1] = max(0., current[1]+ny*1e-9)\n            current[7] += p.mass*p.gravity*ny*1e-9\n            impacts[-1].after = current.copy()\n        elif guard_index is not None and len(result.t_events[guard_index]):\n            wall_near = not wall_near\n            continue\n        elif wall_index is not None and len(result.t_events[wall_index]):\n            nx, ny = wall_normal(p, current, holes)\n            face_hit = abs(ny) \u003c 1e-5\n            normal_v = current[2]*nx+current[3]*ny\n            depth = p.wall_thickness+2*p.radius if face_hit else max(p.radius*.2, 1e-5)\n            # Separate the short elastic deflection from the full distance the\n            # sphere must travel to clear the back face. W is a brittle-panel\n            # fracture-energy budget, not a spring stretched through the wall.\n            fraction = WALL_MATERIALS[p.wall_material].elastic_fraction\n            elastic_limit = max(1e-8, min(p.radius*.08, p.wall_thickness*fraction))\n            stiffness = 2*p.wall_work/elastic_limit**2\n            if not face_hit:\n                stiffness = max(stiffness, p.mass*(normal_v/max(.02*p.radius, 1e-6))**2)\n            active = WallContact(time, current.copy(), (nx, ny), stiffness, depth,\n                                 p.wall_restitution, face_hit, fracture_depth=elastic_limit)\n            contacts.append(active)\n        else:\n            break\n        if time >= p.max_time:\n            break\n    else:\n        reason = \"Достигнут предел 300 внутренних событий\"\n\n    if active is not None:\n        active.end = time\n        active.outcome = \"incomplete\"\n        if active.hole_index is not None:\n            hole = holes[active.hole_index]\n            hole.bottom = max(0., min(hole.bottom, current[1]-.15*p.radius))\n            hole.top = max(hole.top, current[1]+2.15*p.radius)\n    solution = PiecewiseSolution(segments, impacts, initial)\n    times = list(np.linspace(0, time, 1201))\n    for event in impacts:\n        times.append(event.time)\n        if event.time > 0:\n            times.append(np.nextafter(event.time, -np.inf))\n    for contact in contacts:\n        if contact.end is not None:\n            times.extend(np.linspace(contact.start, contact.end, 81))\n            response_end = contact.response_end\n            times.extend(np.linspace(contact.start, response_end, 81))\n            for boundary in (contact.turn_time, contact.fracture_time):\n                if boundary is not None:\n                    times.extend([np.nextafter(boundary, -np.inf), boundary])\n    times = np.unique(times)\n    states = solution(times)\n    states[1] = np.maximum(states[1], 0)\n    peaks.append(time)\n    apex_time = max(peaks, key=lambda t: solution(t)[1])\n    warning = []\n    max_re = max(forces(p, vx, vy)[3] for vx, vy in zip(states[2, ::10], states[3, ::10]))\n    if p.rho > 0 and p.drag_enabled and p.mode == 0 and max_re > 1:\n        warning.append(\"Линейный закон — учебное приближение: Re > 1. Для обычного броска выберите «Сфера».\")\n    if p.rho > 0 and p.drag_enabled and p.mode == 1 and max_re > 1e6:\n        warning.append(\"Re > 10⁶: корреляция Cᴅ вышла за рекомендованный диапазон.\")\n    sound = PLANETS[p.planet].sound_speed\n    if p.rho > 0 and p.drag_enabled and sound > 0 and max(np.hypot(states[2]-p.wind, states[3]))/sound > .3:\n        warning.append(\"M > 0,3: сжимаемость газа может влиять на сопротивление; она не моделируется.\")\n    if states[1].max() > 500:\n        warning.append(\"Высота > 500 м: постоянные плотность и g становятся менее точным приближением.\")\n    if p.rho*p.volume >= p.mass:\n        warning.append(\"Плотность шара не выше плотности среды: возможны зависание или всплытие.\")\n    if p.wall_enabled:\n        warning.append(\"Контакт и разрушение — энергетическая модель хрупкой панели; параметры стены требуют калибровки.\")\n    if not landed or reason.startswith(\"Достигнут\"):\n        warning.append(reason+\"; итоговые значения относятся к рассчитанному участку.\")\n    return Flight(p, times, states, solution, landed, reason, float(apex_time), tuple(warning), tuple(impacts), initial, tuple(contacts), tuple(holes))\n\n\ndef vacuum_reference(p):\n    return simulate(replace(p, mode=3, density=0, wind=0, drag_enabled=False,\n                            bounce_enabled=False, wall_enabled=False))\n","ballistics/materials.py":"\"\"\"Reference densities and explicitly uncalibrated educational wall presets.\n\nWall R values are scenario parameters, NOT measured penetration strengths.\nRestitution depends on both contacting surfaces and impact speed; suggested e\nvalues are editable examples, not universal constants of a ball material.\n\"\"\"\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass BallMaterial:\n    name: str\n    density: float\n    restitution: float\n\n\nBALL_MATERIALS = (\n    BallMaterial(\"Свои значения\", 700.0, .7),\n    BallMaterial(\"Пеноматериал · 30 кг/м³\", 30.0, .3),\n    BallMaterial(\"Древесина · 600 кг/м³\", 600.0, .4),\n    BallMaterial(\"Резина · 1100 кг/м³\", 1100.0, .8),\n    BallMaterial(\"Стекло · 2500 кг/м³\", 2500.0, .6),\n    BallMaterial(\"Алюминий · 2700 кг/м³\", 2700.0, .5),\n    BallMaterial(\"Сталь · 7850 кг/м³\", 7850.0, .5),\n)\n\n\n@dataclass(frozen=True)\nclass WallMaterial:\n    name: str\n    resistance: float\n    color: str\n    elastic_fraction: float = .02\n\n\nWALL_MATERIALS = (\n    WallMaterial(\"Пеноматериал (учебный)\", .02e6, \"#d8e0e6\", .25),\n    WallMaterial(\"Картон (учебный)\", .2e6, \"#c7ab7c\", .06),\n    WallMaterial(\"Древесина (учебный)\", 2e6, \"#b68b5a\"),\n    WallMaterial(\"Кирпич (учебный)\", 5e6, \"#ba7665\", .005),\n    WallMaterial(\"Бетон (учебный)\", 15e6, \"#a0a6ac\", .003),\n    WallMaterial(\"Свои параметры\", 1e6, \"#afbfcf\"),\n)\n","ballistics/experiments.py":"\"\"\"Repeatable wall experiments; vary launch speed and mass, not impact speed.\"\"\"\nfrom dataclasses import dataclass, replace\nfrom math import pi, hypot\n\nfrom .physics import simulate\n\n\n@dataclass\nclass Trial:\n    speed: float\n    mass: float\n    result: str\n    impact_speed: float | None\n    normal_energy: float | None\n    required_work: float | None\n    residual_speed: float | None\n\n\ndef run_trials(params, speeds=(5, 10, 20, 30, 50, 80), masses=(.05, .145, .5, 1.0)):\n    rows = []\n    for mass in masses:\n        # Keep material density fixed when the solid-sphere option is selected.\n        # In manual mode, keep radius fixed and let effective density vary.\n        radius = (3*mass/(4*pi*params.body_density))**(1/3) if params.derive_mass else params.radius\n        for speed in speeds:\n            p = replace(params, speed=speed, mass=mass, radius=radius, derive_mass=False,\n                        wall_enabled=True, max_time=min(params.max_time, 45))\n            try:\n                flight = simulate(p)\n            except ValueError as error:\n                rows.append(Trial(speed, mass, \"Вне области: \"+str(error), None, None, None, None))\n                continue\n            event = flight.wall_impact\n            if event is None:\n                result = \"Контакт не завершён\" if flight.contacts else (\"Не попал\" if flight.landed else \"Нет попадания за 45 с\")\n                rows.append(Trial(speed, mass, result, None, None, None, None))\n            else:\n                result = \"Пробита (модель)\" if event.perforated else (\n                    \"Край стены\" if event.kind == \"wall_edge\" else \"Не пробита\")\n                rows.append(Trial(speed, mass, result, hypot(event.before[2], event.before[3]),\n                                  event.normal_energy, event.required_work, hypot(event.after[2], event.after[3])))\n    return rows\n","bridge.py":"\"\"\"Serialize desktop simulation results for the browser renderer.\"\"\"\nfrom dataclasses import asdict, replace\nimport json\nfrom math import hypot, nextafter, inf\n\nfrom ballistics.physics import Parameters, simulate, forces, vacuum_reference\nfrom ballistics.experiments import run_trials\n\n\ndef encode_flight(params, compare):\n    flight = simulate(params)\n    p = flight.params\n    rows = []\n    for t, state in zip(flight.time, flight.states.T):\n        x, height, vx, vy = state[:4]\n        _, _, drag, re, cd = forces(p, vx, vy)\n        rows.append([t, x, height, vx, vy, *drag, *flight.contact_force(t),\n                     .5*p.mass*(vx**2+vy**2), p.mass*p.gravity*height, re, cd,\n                     *state[4:8], flight.energy_error(state)])\n\n    events = []\n    for impact in flight.impacts:\n        if impact.kind.startswith(\"ground\"):\n            if impact.time > 0:\n                events.append([nextafter(impact.time, -inf), \"До удара о землю\", impact.time])\n            events.append([impact.time, impact.label, impact.time])\n    contacts = []\n    for contact in flight.contacts:\n        contacts.append([contact.start, contact.end, contact.fracture_time])\n        for t, label in ((contact.start, \"Начало контакта со стеной\"),\n                         (contact.turn_time, \"Максимальное сжатие\"),\n                         (contact.fracture_time, \"Разрушение канала\"),\n                         (contact.end, \"Конец контакта со стеной\")):\n            if t is not None:\n                events.append([t, label, t])\n    reference = []\n    if compare:\n        vacuum = vacuum_reference(p)\n        reference = vacuum.states[:2, ::4].T.tolist()\n        reference.append(vacuum.states[:2, -1].tolist())\n    return {\n        \"rows\": rows, \"reference\": reference, \"events\": sorted(events), \"contacts\": contacts,\n        \"impacts\": [{\"t\": e.time, \"kind\": e.kind, \"label\": e.label, \"impulse\": e.impulse,\n                     \"before\": hypot(*e.before[2:4]), \"after\": hypot(*e.after[2:4]),\n                     \"energy_loss\": e.energy_loss} for e in flight.impacts],\n        \"holes\": [asdict(hole) for hole in flight.holes],\n        \"duration\": flight.duration, \"peak\": flight.peak_height, \"params\": asdict(p),\n        \"radius\": p.radius, \"rho\": p.rho, \"gravity\": p.mass*p.gravity,\n        \"groundStopped\": bool(flight.impacts and flight.impacts[-1].kind == \"ground_stop\"),\n        \"buoyancy\": p.rho*p.volume*p.gravity, \"warnings\": flight.warnings, \"reason\": flight.reason,\n    }\n\n\ndef evaluate(payload):\n    request = json.loads(payload)\n    p = Parameters(**request[\"params\"])\n    if request[\"kind\"] == \"trials\":\n        p.validate()\n        result = [asdict(row) for row in run_trials(p, request[\"speeds\"], request[\"masses\"])]\n    else:\n        result = encode_flight(p, request[\"compare\"])\n    return json.dumps(result, ensure_ascii=False, allow_nan=False)\n"};
+const WORKER = "const root = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/';\nlet engine;\nasync function boot(sources) {\n  importScripts(root + 'pyodide.js');\n  self.postMessage({kind: 'status', text: 'Загружаем библиотеки расчёта…'});\n  const py = await loadPyodide({ indexURL: root, packages: ['scipy'] });\n  self.postMessage({kind: 'status', text: 'Вычисляем траекторию…'});\n  py.FS.mkdir('/home/pyodide/ballistics');\n  for (const [name, source] of Object.entries(sources))\n    py.FS.writeFile('/home/pyodide/' + name, source);\n  return py.runPython('from bridge import evaluate\\nevaluate');\n}\nself.onmessage = async ({data}) => {\n  const {id, kind, sources, ...payload} = data;\n  try {\n    engine ??= boot(sources);\n    const evaluate = await engine;\n    self.postMessage({id, kind, result: JSON.parse(evaluate(JSON.stringify({kind, ...payload})))});\n  } catch (error) {\n    self.postMessage({id, kind, error: String(error)});\n  }\n};\n";
+'use strict';
+const $ = id => document.getElementById(id);
+const all = selector => [...document.querySelectorAll(selector)];
+const fmt = (n, digits = 2) => n.toLocaleString('ru-RU', {maximumFractionDigits: digits, useGrouping: false});
+const norm = Math.hypot;
+const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+const color = {speed: '#008c80', air: '#9b6100', gravity: '#bd4031', drag: '#006dad', buoyancy: '#8055a9', contact: '#494e62'};
+const canvas = $('plot');
+const githubOwner = location.hostname.match(/^([a-z0-9-]+)\.github\.io$/i)?.[1];
+if (githubOwner) {
+  const repo = location.pathname.split('/')[1] || githubOwner + '.github.io';
+  $('mac').href = 'https://github.com/' + githubOwner + '/' + repo + '/releases/latest/download/ballistics-mac.dmg';
+} else if (location.protocol === 'file:' && location.pathname.endsWith('/docs/index.html')) {
+  $('mac').href = '../dist/ballistics-mac.dmg';
+}
+
+let params = {...CONFIG.presets[0]};
+let tab = 'launch', airMode = 1;
+let flight, time = 0, playing = false, lastFrame = null, resumeAfterEdit = false;
+let animationFrame = null, plotSize = null;
+let zoom = 1, camera = null, pointer = null;
+let worker, version = 0, active = null, queued = null, timer, pending = true, loaded = false;
+let watchdog;
+let trialSerial = 0, trials = [];
+
+function resolvedMass() {
+  return params.derive_mass ? params.body_density * 4 * Math.PI * params.radius ** 3 / 3 : params.mass;
+}
+
+function numberField(label, key, {unit = '', scale = 1, min = 0, max = null, step = 'any', value, disabled = false, update} = {}) {
+  const node = document.createElement('label');
+  node.className = 'field';
+  const caption = document.createElement('span');
+  caption.textContent = label;
+  if (unit) {
+    const small = document.createElement('small');
+    small.className = 'unit';
+    small.textContent = unit;
+    caption.append(small);
+  }
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = step;
+  input.min = min;
+  if (max !== null) input.max = max;
+  let initial = value ?? params[key] * scale;
+  input.value = +initial.toPrecision(10);
+  input.disabled = disabled;
+  input.id = 'field-' + key;
+  const applyValue = () => {
+    const number = input.valueAsNumber;
+    if (!input.validity.valid || !Number.isFinite(number) || number === initial) return;
+    if (update) update(number / scale);
+    else params[key] = number / scale;
+    initial = number;
+    changed();
+  };
+  input.oninput = applyValue;
+  input.onchange = () => {
+    applyValue();
+    if (!input.validity.valid || !Number.isFinite(input.valueAsNumber)) input.value = +initial.toPrecision(10);
+    if (update) renderControls();
+  };
+  node.append(caption, input);
+  return node;
+}
+
+function selectField(label, key, labels, update) {
+  const node = document.createElement('label');
+  node.className = 'field';
+  const select = document.createElement('select');
+  select.id = 'field-' + key;
+  labels.forEach((name, i) => select.add(new Option(name, i)));
+  select.value = params[key];
+  select.onchange = () => {
+    params[key] = +select.value;
+    update?.();
+    changed();
+    renderControls();
+  };
+  node.append(label, select);
+  return node;
+}
+
+function renderControls() {
+  const controls = $('controls');
+  controls.replaceChildren();
+  all('[data-tab]').forEach(button => button.setAttribute('aria-pressed', button.dataset.tab === tab));
+  const field = (label, key, options) => controls.append(numberField(label, key, options));
+  const select = (label, key, labels, update) => controls.append(selectField(label, key, labels, update));
+  if (tab === 'launch') {
+    field('Начальная скорость', 'speed', {unit:'м/с', max:1000});
+    field('Угол броска', 'angle', {unit:'°', min:-180, max:180});
+    field('Высота над землёй', 'height', {unit:'м', max:9999});
+  } else if (tab === 'ball') {
+    select('Материал шара', 'ball_material', CONFIG.balls.map(ball => ball.name), () => {
+      const material = CONFIG.balls[params.ball_material];
+      if (!params.ball_material && params.derive_mass) params.mass = resolvedMass();
+      params.derive_mass = params.ball_material !== 0;
+      if (params.derive_mass) {
+        params.body_density = material.density;
+        params.restitution = material.restitution;
+      }
+    });
+    field('Масса', 'mass', {unit:'кг', min:1e-9, value:resolvedMass(), disabled:params.derive_mass, update:value => {
+      params.mass = value;
+      params.body_density = value / (4 * Math.PI * params.radius ** 3 / 3);
+    }});
+    field('Диаметр', 'radius', {unit:'см', scale:200, min:.02, max:200, update:value => {params.radius = value;}});
+    field('Объём', 'volume', {unit:'см³', min:.0000041888, max:4188790.205, value:4 * Math.PI * params.radius ** 3 / 3 * 1e6,
+      update:value => {params.radius = Math.cbrt(3 * value / (4 * Math.PI * 1e6));}});
+    field('Плотность материала', 'body_density', {unit:'кг/м³', min:.001,
+      value:resolvedMass() / (4 * Math.PI * params.radius ** 3 / 3),
+      update:value => {params.body_density = value; params.derive_mass = true; params.ball_material = 0;}});
+    const derive = document.createElement('button');
+    derive.textContent = params.derive_mass ? 'Перейти к ручной массе' : 'Считать массу по плотности';
+    derive.onclick = () => {
+      params.mass = resolvedMass();
+      params.body_density = params.mass / (4 * Math.PI * params.radius ** 3 / 3);
+      params.derive_mass = !params.derive_mass;
+      params.ball_material = 0;
+      changed();
+      renderControls();
+    };
+    controls.append(derive);
+  } else if (tab === 'air') {
+    select('Планета', 'planet', CONFIG.planets.map(planet => planet.name), () => {
+      const {gravity, density, viscosity} = CONFIG.planets[params.planet];
+      Object.assign(params, {gravity, density, viscosity});
+    });
+    field('Ускорение g', 'gravity', {unit:'м/с²', max:100});
+    select('Модель', 'mode', CONFIG.modes, () => {
+      params.drag_enabled = params.mode !== 3;
+      if (params.drag_enabled) airMode = params.mode;
+    });
+    const vacuum = params.mode === 3;
+    field('Плотность среды', 'density', {unit:'кг/м³', max:1000, disabled:vacuum});
+    field('Вязкость', 'viscosity', {unit:'Па·с', min:1e-9, max:1, disabled:vacuum});
+    field('Ветер по оси x', 'wind', {unit:'м/с', min:-300, max:300, disabled:vacuum});
+    if (params.mode === 0) {
+      field('Коэффициент b', 'linear_b', {unit:'кг/с', max:1000, disabled:!params.drag_enabled});
+      const stokes = document.createElement('button');
+      stokes.textContent = 'Подставить коэффициент Стокса';
+      stokes.onclick = () => {
+        params.linear_b = 6 * Math.PI * params.viscosity * params.radius;
+        params.drag_enabled = true;
+        changed();
+        renderControls();
+      };
+      controls.append(stokes);
+    }
+    if (params.mode === 2) field('Коэффициент Cᴅ', 'cd', {max:10, disabled:!params.drag_enabled});
+  } else {
+    select('Материал стены', 'wall_material', CONFIG.walls.map(wall => wall.name.replace(' (учебный)', '')), () => {
+      params.wall_resistance = CONFIG.walls[params.wall_material].resistance;
+    });
+    field('Расстояние до стены', 'wall_x', {unit:'м', min:.0001, max:1000});
+    field('Высота стены', 'wall_height', {unit:'м', min:.001, max:1000});
+    field('Толщина стены', 'wall_thickness', {unit:'см', min:.01, max:1000, scale:100});
+    field('Условное сопротивление R', 'wall_resistance', {unit:'МПа', min:.0001, max:1000, scale:1e-6});
+    field('Коэффициент отскока', 'wall_restitution', {unit:'%', max:100, scale:100});
+    const note = document.createElement('p');
+    note.className = 'note';
+    note.textContent = params.wall_enabled ? 'Учебная модель. Свойства материалов заданы условно.' : 'Стена отключена. Включи её в разделе «Физика опыта».';
+    controls.append(note);
+  }
+}
+
+function syncToggles() {
+  for (const key of ['drag_enabled', 'bounce_enabled', 'wall_enabled']) $(key).checked = params[key];
+  $('restitution').value = Math.round(params.restitution * 10000) / 100;
+  $('max_bounces').value = params.max_bounces;
+  $('bounce-example').textContent = 'При 10 м/с вниз шар отскочит вверх со скоростью ' + fmt(10 * params.restitution) + ' м/с.';
+}
+
+function setPreset(index) {
+  setPlaying(false);
+  resumeAfterEdit = false;
+  params = {...CONFIG.presets[index]};
+  all('[data-preset]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.preset === index));
+  tab = index === 2 ? 'wall' : 'launch';
+  time = 0;
+  fit();
+  renderControls();
+  changed();
+}
+
+function changed() {
+  syncToggles();
+  resumeAfterEdit ||= playing;
+  setPlaying(false);
+  pending = true;
+  version++;
+  $('play').disabled = $('timeline').disabled = $('events').disabled = true;
+  $('retry').hidden = true;
+  if (flight) {
+    $('flight-note').textContent = 'Пересчитываем условия…';
+    render();
+  } else {
+    $('scene-message').hidden = false;
+    $('scene-text').textContent = loaded ? 'Вычисляем траекторию…' : 'Загружаем расчётный модуль…';
+  }
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    queued = {id:version, kind:'flight', params:{...params}, compare:$('compare').checked};
+    dispatch();
+  }, 130);
+}
+
+function createWorker() {
+  const url = URL.createObjectURL(new Blob([WORKER], {type:'text/javascript'}));
+  const instance = new Worker(url);
+  instance.onmessage = ({data}) => {
+    if (data.kind === 'status') {
+      $('scene-text').textContent = data.text;
+      return;
+    }
+    loaded = true;
+    if (data.kind === 'trials') {
+      if (data.id === trialSerial) showTrials(data);
+      return;
+    }
+    if (active?.id !== data.id) return;
+    clearTimeout(watchdog);
+    active = null;
+    if (data.id === version) {
+      if (data.error) showError(data.error);
+      else setFlight(data.result);
+    }
+    dispatch();
+  };
+  instance.onerror = event => {
+    clearTimeout(watchdog);
+    active = null;
+    showError(event.message || 'Не удалось запустить модуль.');
+  };
+  URL.revokeObjectURL(url);
+  return instance;
+}
+
+function dispatch() {
+  if (active || !queued) return;
+  if (queued.id !== version) {
+    queued = null;
+    return;
+  }
+  active = queued;
+  queued = null;
+  try {
+    worker ??= createWorker();
+    worker.postMessage({...active, sources: loaded ? undefined : SOURCES});
+    if (!loaded) {
+      watchdog = setTimeout(() => {
+        worker.terminate();
+        worker = null;
+        active = null;
+        showError('Истекло время загрузки модуля.');
+      }, 90000);
+    }
+  } catch (error) {
+    active = null;
+    showError(error.message);
+  }
+}
+
+function showError(error) {
+  resumeAfterEdit = false;
+  if (loaded && !error.includes('ValueError') && !flight) loaded = false;
+  const parameterError = error.includes('ValueError:');
+  $('scene-message').hidden = parameterError && Boolean(flight);
+  $('scene-text').textContent = parameterError ? error.split('ValueError:').pop().trim() : 'Не удалось загрузить или запустить расчёт. Проверь подключение к интернету.';
+  $('scene-text').title = error;
+  $('flight-note').textContent = $('scene-text').textContent;
+  $('retry').hidden = parameterError;
+  console.error(error);
+}
+
+function setFlight(result) {
+  flight = result;
+  pending = false;
+  $('scene-message').hidden = true;
+  $('play').disabled = $('timeline').disabled = !flight.duration;
+  $('run-trials').disabled = false;
+  $('timeline').max = flight.duration || 1;
+  const events = $('events');
+  events.replaceChildren(new Option('События', ''));
+  flight.events.forEach(([,label,t], i) => events.add(new Option(label + ' · ' + fmt(t, 6) + ' с', i)));
+  events.disabled = !flight.events.length;
+  $('flight-note').textContent = [flight.reason, ...flight.warnings.filter(w => !w.startsWith(flight.reason))].join(' · ');
+  seek(Math.min(time, flight.duration));
+  drawChart();
+  if (resumeAfterEdit) {
+    resumeAfterEdit = false;
+    if (time < flight.duration) setPlaying(true);
+  }
+}
+
+function sample(t) {
+  const rows = flight.rows;
+  let lo = 0, hi = rows.length - 1;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (rows[mid][0] < t) lo = mid + 1;
+    else hi = mid;
+  }
+  const b = rows[lo];
+  if (!lo || b[0] === t) return b;
+  const a = rows[lo - 1], q = clamp((t - a[0]) / (b[0] - a[0]), 0, 1);
+  return a.map((value, i) => value + q * (b[i] - value));
+}
+
+function seek(t) {
+  if (!flight) return;
+  time = clamp(t, 0, flight.duration);
+  $('timeline').value = time;
+  $('clock').value = time.toFixed(3).replace('.', ',') + ' / ' + flight.duration.toFixed(2).replace('.', ',') + ' с';
+  const [,x,h,vx,vy] = sample(time);
+  $('speed-readout').textContent = fmt(norm(vx, vy)) + ' м/с';
+  $('air-readout').textContent = flight.rho ? fmt(norm(vx - flight.params.wind, vy)) + ' м/с' : '—';
+  $('height-readout').textContent = fmt(h) + ' м';
+  $('distance-readout').textContent = fmt(x) + ' м';
+  render();
+}
+
+function setPlaying(value) {
+  if (playing === value) return;
+  playing = value;
+  lastFrame = null;
+  $('play').textContent = value ? 'Ⅱ Пауза' : '▶ Запустить';
+  if (value) animationFrame = requestAnimationFrame(tick);
+  else if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+}
+
+function togglePlay() {
+  if (!flight || pending || !flight.duration) return;
+  if (playing) return setPlaying(false);
+  if (time >= flight.duration) seek(0);
+  setPlaying(true);
+}
+
+function advance(elapsed, rate) {
+  let t = time;
+  if (!$('slow').checked) return t + elapsed * rate;
+  for (let i = 0; i < flight.contacts.length * 3 + 3; i++) {
+    let boundary = Infinity;
+    let factor = 1;
+    for (const [start, end, fracture] of flight.contacts) {
+      if (start > t) boundary = Math.min(boundary, start);
+      if (end === null || t < start || t >= end) continue;
+      boundary = fracture !== null && t < fracture ? fracture : end;
+      const transit = fracture !== null && t >= fracture;
+      factor = clamp((boundary - (transit ? fracture : start)) / (transit ? .25 : .45), 1e-10, 1);
+      break;
+    }
+    const needed = (boundary - t) / (factor * rate);
+    if (needed >= elapsed) return t + elapsed * factor * rate;
+    t = boundary;
+    elapsed -= needed;
+  }
+  return t + elapsed * rate;
+}
+function tick(now) {
+  animationFrame = null;
+  if (!playing) return;
+  if (lastFrame !== null) seek(advance(Math.min((now - lastFrame) / 1000, .1), +$('rate').value));
+  lastFrame = now;
+  if (time >= flight.duration) setPlaying(false);
+  else animationFrame = requestAnimationFrame(tick);
+}
+
+function surface(target, size) {
+  const w = size?.width ?? target.clientWidth, h = size?.height ?? target.clientHeight;
+  const dpr = devicePixelRatio || 1;
+  if (!w || !h) return null;
+  if (target.width !== Math.round(w * dpr) || target.height !== Math.round(h * dpr)) {
+    target.width = Math.round(w * dpr);
+    target.height = Math.round(h * dpr);
+  }
+  const ctx = target.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return {ctx, w, h};
+}
+
+function view(w, h, state) {
+  let minX = 0, maxX = 0, maxY = 0;
+  for (const [,x,y] of flight.rows) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  for (const [x,y] of flight.reference) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  if (params.wall_enabled) {
+    maxX = Math.max(maxX, params.wall_x + params.wall_thickness);
+    maxY = Math.max(maxY, params.wall_height);
+  }
+  const r = params.radius;
+  const width = Math.max(1, (maxX - minX + 2*r) * 1.16);
+  const height = Math.max(1, (maxY + 2*r) * 1.2);
+  const scale = zoom * Math.max(.001, Math.min((w - 84) / width, (h - 99) / height));
+  const center = $('follow').checked ? [state[1], state[2] + r] : camera;
+  const x0 = center ? w/2 - center[0]*scale : w/2 + 12 - (minX+maxX)*scale/2;
+  const y0 = center ? h/2 + center[1]*scale : h-58;
+  return {scale, x0, y0, x: n => x0+n*scale, y: n => y0-n*scale};
+}
+
+function stepSize(value) {
+  const power = 10 ** Math.floor(Math.log10(value));
+  return ([1, 2, 5, 10].find(k => k * power >= value) ?? 10) * power;
+}
+
+function path(ctx, points, stroke, width, dash = []) {
+  if (!points.length) return;
+  ctx.beginPath();
+  ctx.moveTo(...points[0]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(...points[i]);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function grid(ctx, w, h, map) {
+  const {x, y, x0, y0, scale} = map;
+  const step = stepSize(55/scale);
+  ctx.font = '11px system-ui';
+  const base = clamp(y0, 19, h-45);
+  const left = clamp(x0, 34, w-31);
+  if (y0 < h) {
+    ctx.fillStyle = '#dce8e6';
+    ctx.fillRect(0, Math.max(0, y0), w, h - Math.max(0, y0));
+  }
+  for (let i = Math.ceil(-x0/(scale*step)); x(i*step) <= w; i++) {
+    const px = x(i*step);
+    path(ctx, [[px,0],[px,h-28]], '#c7ddea', 1);
+    ctx.fillStyle = '#506c80';
+    if (px > 25 && px < w-26) ctx.fillText(fmt(i*step, 4), px-9, base+16);
+  }
+  for (let i = Math.max(0, Math.ceil((y0-h+27)/(scale*step))); y(i*step) >= 14; i++) {
+    const py = y(i*step);
+    path(ctx, [[0,py],[w,py]], '#c7ddea', 1);
+    ctx.fillStyle = '#506c80';
+    ctx.fillText(fmt(i*step, 4), left-30, py-3);
+  }
+  if (y0 >= 0 && y0 < h-22) path(ctx, [[0,y0],[w,y0]], '#6f8e9a', 1.4);
+  if (x0 >= 0 && x0 <= w) path(ctx, [[x0,12],[x0,base]], '#6f8e9a', 1.2);
+  ctx.fillStyle = '#344e62';
+  ctx.fillText('x, м', w-30, base+16);
+  ctx.fillText('h, м', left+4, 16);
+}
+
+function wall(ctx, map) {
+  if (!params.wall_enabled) return;
+  const {wall_x:x, wall_height:height, wall_thickness:thickness, wall_material:material} = params;
+  const intervals = pending ? [] : flight.holes.filter(h => h.time <= time).sort((a,b) => a.bottom-b.bottom);
+  const tint = CONFIG.walls[material].color;
+  function rectangle(bottom, top) {
+    if (top <= bottom) return;
+    const width = thickness * map.scale, size = (top-bottom)*map.scale;
+    ctx.fillStyle = tint;
+    ctx.fillRect(map.x(x), map.y(top), width, size);
+    ctx.strokeStyle = '#654e3e';
+    ctx.lineWidth = .8;
+    if (width >= 1.2) ctx.strokeRect(map.x(x), map.y(top), width, size);
+  }
+  let bottom = 0;
+  for (const hole of intervals) {
+    rectangle(bottom, clamp(hole.bottom, 0, height));
+    bottom = Math.max(bottom, clamp(hole.top, 0, height));
+  }
+  rectangle(bottom, height);
+}
+
+function drawBall(ctx, x, y, r) {
+  if (r < 5) {
+    ctx.beginPath();
+    ctx.arc(x,y,6,0,2*Math.PI);
+    ctx.strokeStyle = '#a66c20';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  const fill = ctx.createRadialGradient(x-r*.32,y-r*.34,0,x,y,r);
+  fill.addColorStop(0, '#fff0c3');
+  fill.addColorStop(.55, '#eda543');
+  fill.addColorStop(1, '#9c5b10');
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,2*Math.PI);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (r >= 3) {
+    ctx.strokeStyle = '#935309';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+function vectors(ctx, w, h, x, y, radius, state) {
+  const [, , , vx, vy, dx, dy, cx, cy] = state;
+  const descriptors = [
+    ['gravity', 'Тяжесть', 0, -flight.gravity, 3, false],
+    ['drag', 'Сопротивление', dx, dy, 1, false],
+    ['buoyancy', 'Сила Архимеда', 0, flight.buoyancy, 0, false],
+    ['contact', 'Реакция стены', cx, cy, 2, false],
+    ['speed', 'Скорость шара', vx, vy, 0, true],
+    ['air', 'Относительно воздуха', vx-flight.params.wind, vy, 1, true],
+  ];
+  if (flight.rho === 0) descriptors.pop();
+  if (time === flight.duration && flight.groundStopped) {
+    descriptors.push(['contact', 'Реакция земли', 0, Math.max(0, flight.gravity-flight.buoyancy), 2, false]);
+  }
+  const forceMax = Math.max(1e-20, ...descriptors.slice(0,4).map(v => norm(v[2],v[3])));
+  const slots = Math.min(156, Math.floor((w-24)/2));
+  const gap = Math.min(44, w - 2*slots - 8);
+  const anchor = clamp(x, slots+gap/2+4, w-slots-gap/2-4);
+  const top = clamp(y-77, 30, h-187);
+  const existing = [];
+  for (const [key,name,fx,fy,slot,speed] of descriptors) {
+    const magnitude = norm(fx,fy);
+    if (!(speed ? $('velocities').checked : $('forces').checked && magnitude > 1e-12)) continue;
+    const paint = color[key];
+    const textX = speed || key === 'gravity' ? anchor+gap/2 : anchor-gap/2-slots;
+    const textY = top + slot*32;
+    if (magnitude > 1e-12) {
+      const ux = fx/magnitude, uy = -fy/magnitude;
+      let lane = 0;
+      for (const [a,b] of existing) if (ux*a+uy*b > .985) lane += 6;
+      existing.push([ux,uy]);
+      const sx = x-uy*lane, sy = y+ux*lane;
+      let length = Math.max(radius+17, speed ? (key === 'speed' ? 94 : 81) : 35+41*Math.sqrt(magnitude/forceMax));
+      const limitX = ux > 0 ? (w-7-sx)/ux : (7-sx)/ux;
+      const limitY = uy > 0 ? (h-29-sy)/uy : (7-sy)/uy;
+      if (Number.isFinite(limitX)) length = Math.min(length, limitX);
+      if (Number.isFinite(limitY)) length = Math.min(length, limitY);
+      if (length > 8) {
+        const ex = sx+ux*length, ey = sy+uy*length;
+        path(ctx, [[sx,sy],[ex,ey]], paint, 2.4, key === 'air' ? [5,3] : []);
+        ctx.fillStyle = paint;
+        ctx.beginPath();
+        ctx.moveTo(ex,ey);
+        ctx.lineTo(ex-ux*10-uy*4, ey-uy*10+ux*4);
+        ctx.lineTo(ex-ux*10+uy*4, ey-uy*10-ux*4);
+        ctx.fill();
+      }
+    }
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#f1f8fc';
+    ctx.lineWidth = 3;
+    ctx.fillStyle = paint;
+    ctx.font = (w < 440 ? '10px' : '12px') + ' system-ui';
+    ctx.strokeText(name, textX, textY);
+    ctx.fillText(name, textX, textY);
+    ctx.font = '600 14px ui-monospace, monospace';
+    const number = fmt(magnitude, magnitude < .1 ? 5 : 2) + (speed ? ' м/с' : ' Н');
+    ctx.strokeText(number, textX, textY+15);
+    ctx.fillText(number, textX, textY+15);
+  }
+}
+
+function render() {
+  const drawing = surface(canvas, plotSize);
+  if (!drawing || !flight) return;
+  const {ctx, w, h} = drawing;
+  const state = sample(time), map = view(w, h, state);
+  ctx.fillStyle = '#edf7fc';
+  ctx.fillRect(0,0,w,h);
+  grid(ctx, w, h, map);
+  if ($('trajectory').checked) {
+    const coords = ([,x,h]) => [map.x(x),map.y(h+params.radius)];
+    path(ctx, flight.rows.map(coords), '#7dabae', 1.7, [5,4]);
+    path(ctx, [...flight.rows.filter(row => row[0] <= time).map(coords), coords(state)], '#008379', 2.2);
+    path(ctx, flight.reference.map(([x,h]) => coords([0,x,h])), '#8b839e', 1.5, [2,5]);
+  }
+  wall(ctx, map);
+  const x = map.x(state[1]), y = map.y(state[2]+params.radius), r = params.radius*map.scale;
+  if (x > 0 && x < w && y > 0 && y < h-19) {
+    if (!pending) vectors(ctx, w, h, x, y, r, state);
+    drawBall(ctx, x, y, r);
+  }
+}
+
+function fit() {
+  $('follow').checked = false;
+  zoom = 1;
+  camera = null;
+  render();
+}
+function zoomAt(factor, x, y) {
+  if (!flight) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const map = view(w, h, sample(time));
+  if (!$('follow').checked) {
+    const nextScale = map.scale * clamp(zoom*factor, .15, 3000) / zoom;
+    camera = [(x-map.x0)/map.scale + (w/2-x)/nextScale, (map.y0-y)/map.scale + (y-h/2)/nextScale];
+  }
+  zoom = clamp(zoom*factor, .15, 3000);
+  render();
+}
+
+function save(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function csvFile(name, headers, rows) {
+  const cell = value => value == null ? '' : '"' + String(value).replaceAll('"','""') + '"';
+  const content = [headers, ...rows].map(row => row.map(cell).join(',')).join('\r\n');
+  save(name, new Blob(['\ufeff', content], {type:'text/csv;charset=utf-8'}));
+}
+
+function drawChart() {
+  if (!$('data').open || !flight) return;
+  const drawing = surface($('chart'));
+  if (!drawing) return;
+  const {ctx,w,h} = drawing;
+  const rows = flight.rows;
+  const model = {
+    velocity: [['Скорость шара, м/с', color.speed, row => norm(row[3],row[4])],
+      ...(flight.rho ? [['Отн. воздуха, м/с', color.air, row => norm(row[3]-flight.params.wind,row[4])]] : [])],
+    height: [['Высота, м', color.speed, row => row[2]]],
+    drag: [['Сопротивление, Н', color.drag, row => norm(row[5],row[6])]],
+    energy: [['Кинетическая, Дж',color.speed,row => row[9]],['Потенциальная, Дж',color.gravity,row => row[10]]],
+    contact: [['Реакция стены, Н',color.contact,row => norm(row[7],row[8])]],
+  }[$('chart-kind').value];
+  const max = Math.max(1e-12, ...model.map(([, , fn]) => Math.max(...rows.map(fn))));
+  ctx.font = '11px system-ui';
+  const left = 56, right = w-17, bottom = h-31, top = 47;
+  for (let i=0;i<=4;i++) {
+    const y = bottom - i / 4 * (bottom-top);
+    path(ctx, [[left,y],[right,y]], '#c7ddea',1);
+    ctx.fillStyle = '#4e6578';
+    ctx.fillText(max < .001 ? (max*i/4).toExponential(1) : fmt(max*i/4,3), 5, y+3);
+    ctx.fillText(fmt(i/4*flight.duration), clamp(left+i/4*(right-left)-7,0,w-26), bottom+16);
+  }
+  model.forEach(([label,tint,fn],index) => {
+    ctx.fillStyle = tint;
+    ctx.fillText(label,left,17+index*14);
+    path(ctx, rows.map(row => [left+row[0]/(flight.duration || 1)*(right-left),bottom-fn(row)/max*(bottom-top)]), tint,1.5);
+  });
+  ctx.fillStyle = '#4e6578';
+  ctx.fillText('t, с',w-27,h-4);
+}
+
+const trialHeaders = ['Начальная скорость, м/с','Масса, кг','Результат','Скорость удара, м/с','Нормальная энергия, Дж','Работа в модели, Дж','Скорость после контакта, м/с'];
+const trialKeys = ['speed','mass','result','impact_speed','normal_energy','required_work','residual_speed'];
+function showTrials({result, error}) {
+  $('run-trials').disabled = false;
+  $('trial-table').replaceChildren();
+  $('trial-status').textContent = error || 'Рассчитано сочетаний: ' + result.length;
+  trials = result ?? [];
+  $('trial-csv').disabled = !trials.length;
+  if (!trials.length) return;
+  const table = document.createElement('table');
+  const header = table.createTHead().insertRow();
+  for (const title of trialHeaders) header.append(Object.assign(document.createElement('th'), {textContent:title}));
+  const body = table.createTBody();
+  for (const trial of trials) {
+    const row = body.insertRow();
+    for (const key of trialKeys) {
+      const value = trial[key];
+      row.insertCell().textContent = typeof value === 'number' ? fmt(value,3) : value ?? '—';
+    }
+  }
+  $('trial-table').append(table);
+}
+
+all('[data-preset]').forEach(button => button.onclick = () => setPreset(+button.dataset.preset));
+all('[data-tab]').forEach(button => button.onclick = () => {tab = button.dataset.tab; renderControls();});
+all('[data-dialog]').forEach(button => button.onclick = () => {
+  $(button.dataset.dialog).showModal();
+  if (button.dataset.dialog === 'data') drawChart();
+});
+all('[data-close]').forEach(button => button.onclick = () => button.closest('dialog').close());
+for (const key of ['drag_enabled','bounce_enabled','wall_enabled']) {
+  $(key).onchange = () => {
+    params[key] = $(key).checked;
+    if (key === 'drag_enabled' && params.drag_enabled) {
+      if (params.mode === 3) params.mode = airMode;
+      if (params.density <= 0) params.density = 1.225;
+    }
+    renderControls();
+    changed();
+  };
+}
+$('restitution').onchange = () => {
+  if ($('restitution').validity.valid && Number.isFinite($('restitution').valueAsNumber)) params.restitution = $('restitution').valueAsNumber / 100;
+  changed();
+};
+$('max_bounces').onchange = () => {
+  if ($('max_bounces').validity.valid && Number.isFinite($('max_bounces').valueAsNumber)) params.max_bounces = $('max_bounces').valueAsNumber;
+  changed();
+};
+$('reset').onclick = () => {airMode = 1; $('compare').checked = false; setPreset(0);};
+$('retry').onclick = () => {
+  clearTimeout(watchdog);
+  worker?.terminate();
+  worker = null;
+  active = queued = null;
+  loaded = false;
+  changed();
+};
+$('play').onclick = togglePlay;
+$('restart').onclick = () => {setPlaying(false); seek(0);};
+$('timeline').oninput = () => {setPlaying(false); seek(+$('timeline').value);};
+$('events').onchange = () => {
+  if ($('events').value === '') return;
+  seek(flight.events[+$('events').value][0]);
+  setPlaying(false);
+  $('events').value = '';
+};
+$('compare').onchange = changed;
+for (const id of ['trajectory','forces','velocities']) $(id).onchange = render;
+$('follow').onchange = () => {
+  if (!$('follow').checked) return fit();
+  camera = null;
+  zoom = 1.8;
+  render();
+};
+$('fit').onclick = fit;
+$('in').onclick = () => zoomAt(1.33,canvas.clientWidth/2,canvas.clientHeight/2);
+$('out').onclick = () => zoomAt(1/1.33,canvas.clientWidth/2,canvas.clientHeight/2);
+$('zoom-ball').onclick = () => {
+  if (!flight) return;
+  const [,x,h] = sample(time);
+  $('follow').checked = false;
+  camera = [x,h+params.radius];
+  const current = view(canvas.clientWidth,canvas.clientHeight,sample(time));
+  zoom = clamp(zoom*18/(current.scale*params.radius), .15, 3000);
+  render();
+};
+canvas.addEventListener('wheel',event => {
+  if (!flight) return;
+  event.preventDefault();
+  zoomAt(Math.exp(clamp(-event.deltaY * .0015,-.5,.5)),event.offsetX,event.offsetY);
+}, {passive:false});
+canvas.onpointerdown = event => {
+  if (!flight || event.button !== 0) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const map = view(w,h,sample(time));
+  $('follow').checked = false;
+  pointer = {x:event.clientX,y:event.clientY,scale:map.scale,cx:(w/2-map.x0)/map.scale,cy:(map.y0-h/2)/map.scale};
+  canvas.setPointerCapture(event.pointerId);
+};
+canvas.onpointermove = event => {
+  if (!pointer) return;
+  camera = [pointer.cx-(event.clientX-pointer.x)/pointer.scale,pointer.cy+(event.clientY-pointer.y)/pointer.scale];
+  render();
+};
+canvas.onpointerup = canvas.onpointercancel = () => {pointer = null;};
+new ResizeObserver(([entry]) => {
+  plotSize = entry.contentRect;
+  render();
+}).observe(canvas);
+new ResizeObserver(drawChart).observe($('chart'));
+document.addEventListener('keydown', event => {
+  if (event.target.matches('input, select, button, a, textarea') || document.querySelector('dialog[open]') || event.repeat) return;
+  if (event.code === 'Space') {event.preventDefault();togglePlay();}
+  if (event.code === 'KeyR') $('restart').click();
+});
+$('chart-kind').onchange = drawChart;
+$('csv').onclick = () => {
+  if (!flight || pending) return;
+  csvFile('trajectory.csv',['t_s','x_m','h_m','vx_m_s','vy_m_s','drag_x_N','drag_y_N','contact_x_N','contact_y_N','K_J','U_J','Re','Cd','work_drag_J','work_buoyancy_J','heat_J','work_contact_J','energy_error_J'],flight.rows);
+};
+$('event-csv').onclick = () => {
+  if (!flight || pending) return;
+  csvFile('impacts.csv',['t_s','event','speed_before_m_s','speed_after_m_s','impulse_x_Ns','impulse_y_Ns','energy_loss_J'],
+    flight.impacts.map(e => [e.t,e.label,e.before,e.after,...e.impulse,e.energy_loss]));
+};
+$('png').onclick = () => {
+  if (flight) canvas.toBlob(blob => {if (blob) save('trajectory.png',blob);});
+};
+$('json').onclick = () => save('parameters.json',new Blob([JSON.stringify(params,null,2)],{type:'application/json'}));
+$('load-json').onchange = async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const input = JSON.parse(await file.text());
+    const values = input.parameters ?? input.params ?? input;
+    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Нужен JSON с параметрами опыта.');
+    const next = {...CONFIG.presets[0]};
+    let found = false;
+    for (const key of Object.keys(next)) {
+      if (!Object.hasOwn(values,key)) continue;
+      found = true;
+      if (typeof next[key] !== typeof values[key] || (typeof next[key] === 'number' && !Number.isFinite(values[key]))) throw new Error('Проверь значение ' + key + '.');
+      next[key] = values[key];
+    }
+    if (!found) throw new Error('В файле нет параметров опыта.');
+    for (const [key,items] of [['mode',CONFIG.modes],['planet',CONFIG.planets],['ball_material',CONFIG.balls],['wall_material',CONFIG.walls]]) {
+      if (!Number.isInteger(next[key]) || !items[next[key]]) throw new Error('Неизвестное значение ' + key + '.');
+    }
+    if (next.radius <= 0 || next.mass <= 0 || next.body_density <= 0 || next.wall_thickness <= 0) throw new Error('Масса, размер, плотность и толщина должны быть положительными.');
+    params = next;
+    if (next.mode !== 3) airMode = next.mode;
+    fit();
+    renderControls();
+    changed();
+    $('export-status').textContent = 'Параметры загружены.';
+  } catch (error) {
+    $('export-status').textContent = error.message;
+  } finally {
+    event.target.value = '';
+  }
+};
+$('run-trials').onclick = () => {
+  const numbers = id => $(id).value.split(';').map(s => s.trim()).filter(Boolean).map(s => Number(s.replace(',','.')));
+  const speeds = numbers('trial-speeds'), masses = numbers('trial-masses');
+  if (!speeds.length || !masses.length || speeds.length*masses.length > 100 ||
+      speeds.some(v => !Number.isFinite(v) || v < 0 || v > 1000) ||
+      masses.some(v => !Number.isFinite(v) || v <= 0 || v > 2000)) {
+    return showTrials({error:'Введи до 100 сочетаний: скорость от 0 до 1000 м/с, масса больше 0 и до 2000 кг.'});
+  }
+  $('run-trials').disabled = $('trial-csv').disabled = true;
+  $('trial-status').textContent = 'Рассчитываем опыты…';
+  worker.postMessage({kind:'trials',id:++trialSerial,params:{...params},speeds,masses});
+};
+$('trial-csv').onclick = () => csvFile('wall-trials.csv',trialHeaders,trials.map(trial => trialKeys.map(key => trial[key])));
+
+renderControls();
+changed();
+
+</script>
+</body>
+</html>
